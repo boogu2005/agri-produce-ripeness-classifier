@@ -5,25 +5,162 @@
 ## 项目结构
 
 ```
-├── config.py          # 配置参数
-├── dataset.py         # 数据加载与预处理
-├── model.py           # CNN 模型定义
-├── train.py           # 训练脚本
-├── predict.py         # 推理脚本
-├── requirements.txt
-├── datasets/          # 数据集
-│   ├── train/
-│   ├── val/
-│   └── test/
-├── models/            # 模型权重
-├── results/           # 评估结果
+深度学习/
+├── config.py              # 配置参数
+├── dataset.py             # 数据加载与预处理
+├── model.py               # CNN 模型定义
+├── train.py               # 标准模型训练 (~37MB)
+├── train_lightweight.py   # 轻量化训练 (~0.2MB)
+├── predict.py             # 推理脚本
+├── requirements.txt       # 依赖列表
+├── README.md              # 项目说明
+├── .gitignore             # Git 忽略规则
+├── results/               # 评估脚本
 │   ├── evaluate.py
 │   └── evaluate_saved_model.py
-└── docs/              # 辅助脚本
-    ├── demo_presentation.py
-    ├── generate_data.py
-    └── split_data.py
+└── docs/                  # 文档
+    └── TRAINING_GUIDE.md  # 训练指南
 ```
+
+## 环境配置
+
+### 1. Python 环境
+
+**要求**: Python 3.8+
+
+检查 Python 版本：
+```bash
+python --version
+```
+
+### 2. 创建虚拟环境（推荐）
+
+```bash
+# 创建虚拟环境
+python -m venv venv
+
+# 激活虚拟环境
+# Windows:
+venv\Scripts\activate
+# Linux/Mac:
+source venv/bin/activate
+```
+
+### 3. 安装依赖
+
+```bash
+pip install -r requirements.txt
+```
+
+### 4. GPU 支持（可选，但强烈推荐）
+
+**NVIDIA GPU 用户**：
+```bash
+# 检查 CUDA 是否可用
+python -c "import torch; print(torch.cuda.is_available())"
+```
+
+如果返回 `True`，PyTorch 会自动使用 GPU 加速训练。
+
+**CPU only 用户**：
+训练可以正常运行，但速度较慢。代码已自动检测并使用 CPU。
+
+### 5. 验证安装
+
+```bash
+python -c "import torch; print(f'PyTorch: {torch.__version__}'); print(f'CUDA: {torch.cuda.is_available()}')"
+```
+
+预期输出示例：
+```
+PyTorch: 2.0.0
+CUDA: True
+```
+
+---
+
+## 常见问题
+
+### ❌ 报错：ModuleNotFoundError
+
+**原因**: 缺少依赖包
+
+**解决**:
+```bash
+pip install -r requirements.txt
+```
+
+### ❌ 报错：num_samples=0
+
+**原因**: 数据目录为空或路径错误
+
+**解决**:
+1. 确认数据集目录已放置图片
+2. 检查 `config.py` 中的路径配置
+3. 目录结构应为：
+   ```
+   train_dataset/
+   ├── 未熟/
+   ├── 半熟/
+   └── 熟透/
+   ```
+
+### ❌ 报错：CUDA out of memory
+
+**原因**: GPU 显存不足
+
+**解决**:
+1. 减小 `config.py` 中的 `BATCH_SIZE`（如从 32 改为 16）
+2. 或使用 LightweightCNN：`python train_lightweight.py`
+
+### ❌ 报错：No module named 'torch'
+
+**原因**: 未安装 PyTorch 或环境未激活
+
+**解决**:
+```bash
+# 激活虚拟环境
+venv\Scripts\activate
+
+# 重新安装
+pip install torch torchvision
+```
+
+### ❌ 报错：Permission denied
+
+**原因**: 权限问题
+
+**解决**:
+```bash
+# Windows: 以管理员身份运行终端
+# Linux/Mac: 使用 sudo
+sudo pip install -r requirements.txt
+```
+
+---
+
+## 快速开始
+
+```bash
+# 1. 克隆项目
+git clone <你的仓库地址>
+cd <项目目录>
+
+# 2. 创建虚拟环境
+python -m venv venv
+venv\Scripts\activate
+
+# 3. 安装依赖
+pip install -r requirements.txt
+
+# 4. 准备数据
+# 将图片放入 train_dataset/未熟、train_dataset/半熟、train_dataset/熟透 目录
+
+# 5. 开始训练
+python train.py
+```
+
+---
 
 ## 安装
 
@@ -35,35 +172,49 @@ Python 3.8+, PyTorch 2.0+.
 
 ## 数据准备
 
-按类别组织图像到 `datasets/` 目录：
+按类别组织图像到数据集目录：
 
 ```
-datasets/
-├── train/
-│   ├── 未熟76/       # BBCH 71-76
-│   ├── 半熟77/       # BBCH 77
-│   └── 熟透78/       # BBCH 78+
-├── val/
-│   └── ... (同上)
-└── test/
-    └── ... (同上)
+train_dataset/
+├── 未熟/       # 未成熟
+├── 半熟/       # 半成熟
+└── 熟透/       # 熟透
+
+val_dataset/
+└── ... (同上)
+
+test_dataset/
+└── ... (同上)
 ```
 
 可使用 `docs/split_data.py` 从原始数据切分训练/验证集：
 
 ```bash
-python docs/split_data.py --source ./test --train ./datasets/train --val ./datasets/val --ratio 0.8
+python docs/split_data.py --source ./test --train ./train_dataset --val ./val_dataset --ratio 0.8
 ```
 
-## 使用
+## 训练
 
-**训练：**
+本项目支持 **2 种模型训练**：
+
+| 模型 | 脚本 | 模型大小 | 说明 |
+|------|------|----------|------|
+| MaturityCNN | `train.py` | ~37MB | 标准高精度模型 |
+| LightweightCNN | `train_lightweight.py` | **~0.2MB** | 轻量化压缩模型 |
+
+**快速开始：**
 
 ```bash
+# 标准模型训练 (~37MB)
 python train.py
+
+# 轻量化模型训练 (~0.2MB)
+python train_lightweight.py
 ```
 
-**评估：**
+详细训练指南请查看 [docs/TRAINING_GUIDE.md](docs/TRAINING_GUIDE.md)
+
+## 评估
 
 ```bash
 python results/evaluate.py
@@ -80,7 +231,7 @@ result = detector.detect_image('path/to/image.jpg')
 批量预测：
 
 ```python
-results = detector.batch_detect('datasets/test/熟透78/', save_results=True)
+results = detector.batch_detect('test_dataset/熟透/', save_results=True)
 ```
 
 ## 模型
@@ -117,4 +268,3 @@ PyTorch / torchvision / scikit-learn / matplotlib / seaborn / OpenCV
 ## License
 
 MIT
-
